@@ -1,4 +1,4 @@
-"""
+﻿"""
 Visual Grid Pathfinding Game using Pygame
 Displays the game with Minecraft-style textures.
 """
@@ -31,9 +31,13 @@ class VisualGame:
         self.rows = rows
         self.tile_size = tile_size
         
-        # Calculate window size
-        self.width = columns * tile_size
-        self.height = rows * tile_size + 180  # Extra space for info panel
+        # Calculate window size with right panel
+        self.grid_width = columns * tile_size
+        self.grid_height = rows * tile_size
+        self.panel_width = 250  # Width of right info panel
+        self.min_height = 720  # Minimum height to show full right panel with all controls
+        self.width = self.grid_width + self.panel_width
+        self.height = max(self.grid_height, self.min_height)  # Use larger of grid height or min height
         
         # Create window
         self.screen = pygame.display.set_mode((self.width, self.height))
@@ -73,16 +77,36 @@ class VisualGame:
         self.pathfinding_time = 0.0
         self.barrier_count = 0
         
+        # Calculate panel position
+        panel_x = self.grid_width + 10
+        
         # Slider for barrier density
         self.fence_density = 0.15
-        self.slider_rect = pygame.Rect(10, self.height - 60, 200, 10)
-        self.slider_handle_rect = pygame.Rect(10, self.height - 65, 15, 20)
+        self.slider_rect = pygame.Rect(panel_x, 480, 220, 10)
+        self.slider_handle_rect = pygame.Rect(panel_x, 475, 15, 20)
         self.dragging_slider = False
         self.initial_villager_pos = None
         self.initial_tilled_positions = []
         
         # Tile editing mode
         self.editing_mode = False
+        
+        # Algorithm selection
+        self.algorithm = "astar"  # Default: astar, dijkstra, greedy, bfs
+        self.algorithm_buttons = {
+            "astar": pygame.Rect(panel_x, 250, 55, 35),
+            "dijkstra": pygame.Rect(panel_x + 60, 250, 55, 35),
+            "greedy": pygame.Rect(panel_x + 120, 250, 55, 35),
+            "bfs": pygame.Rect(panel_x, 295, 55, 35),
+        }
+        
+        # Heuristic selection
+        self.heuristic_type = "manhattan"  # Default: manhattan, euclidean, chebyshev
+        self.heuristic_buttons = {
+            "manhattan": pygame.Rect(panel_x, 360, 70, 35),
+            "euclidean": pygame.Rect(panel_x + 75, 360, 70, 35),
+            "chebyshev": pygame.Rect(panel_x, 405, 70, 35),
+        }
     
     def load_textures(self):
         """Load and scale texture images."""
@@ -106,7 +130,7 @@ class VisualGame:
                 self.texture_villager, (self.tile_size, self.tile_size)
             )
             
-            print("✓ All textures loaded successfully!")
+            print("âœ“ All textures loaded successfully!")
             
         except pygame.error as e:
             print(f"Error loading textures: {e}")
@@ -158,7 +182,7 @@ class VisualGame:
         if self.villager_position is None:
             return
         
-        result = self.pathfinder.find_nearest_tilled(self.villager_position)
+        result = self.pathfinder.find_nearest_tilled(self.villager_position, self.heuristic_type, self.algorithm)
         if result:
             goal, path = result
             self.current_path = path
@@ -257,55 +281,60 @@ class VisualGame:
             self.screen.blit(self.texture_villager, (x, y))
     
     def draw_info_panel(self):
-        """Draw the information panel at the bottom."""
-        panel_y = self.rows * self.tile_size
-        panel_height = 180
+        """Draw the information panel on the right side."""
+        panel_x = self.grid_width
+        panel_width = self.panel_width
         
         # Background
         pygame.draw.rect(self.screen, self.INFO_BG_COLOR, 
-                        (0, panel_y, self.width, panel_height))
+                        (panel_x, 0, panel_width, self.height))
         
         # Stats text
-        text_y = panel_y + 10
+        text_x = panel_x + 10
+        text_y = 10
         
-        # Row 1: Barriers and Route Length
-        barriers_text = self.font.render(f"Barriers: {self.barrier_count}", True, self.TEXT_COLOR)
-        self.screen.blit(barriers_text, (10, text_y))
+        # Title
+        title_text = self.font.render("STATS", True, (255, 255, 100))
+        self.screen.blit(title_text, (text_x + 80, text_y))
         
-        route_text = self.font.render(f"Route Length: {self.route_length} steps", True, self.TEXT_COLOR)
-        self.screen.blit(route_text, (self.width // 2, text_y))
+        # Stats display
+        barriers_text = self.small_font.render(f"Barriers: {self.barrier_count}", True, self.TEXT_COLOR)
+        self.screen.blit(barriers_text, (text_x, text_y + 35))
         
-        # Row 2: Visited Nodes and Pathfinding Time
-        visited_text = self.font.render(f"Visited Nodes: {self.visited_nodes_count}", True, self.TEXT_COLOR)
-        self.screen.blit(visited_text, (10, text_y + 25))
+        route_text = self.small_font.render(f"Route: {self.route_length} steps", True, self.TEXT_COLOR)
+        self.screen.blit(route_text, (text_x, text_y + 60))
         
-        time_text = self.font.render(f"Time: {self.pathfinding_time:.2f}ms", True, self.TEXT_COLOR)
-        self.screen.blit(time_text, (self.width // 2, text_y + 25))
+        visited_text = self.small_font.render(f"Visited: {self.visited_nodes_count}", True, self.TEXT_COLOR)
+        self.screen.blit(visited_text, (text_x, text_y + 85))
         
-        # Row 3: Status
+        time_text = self.small_font.render(f"Time: {self.pathfinding_time * 1000:.2f}ms", True, self.TEXT_COLOR)
+        self.screen.blit(time_text, (text_x, text_y + 110))
+        
+        # Status message
         if self.editing_mode:
-            status_text = "EDIT MODE: Click tiles to add/remove goals | Press E to exit"
+            status_text = "EDIT MODE"
             status_color = (255, 200, 100)
         elif self.animating:
             status_text = "Animating..."
             status_color = (150, 255, 150)
         elif self.current_path:
-            status_text = "Press SPACE to animate"
+            status_text = "Path Found"
             status_color = (150, 255, 150)
         else:
-            status_text = "Press F to find path | Press E to edit goals"
+            status_text = "Ready"
             status_color = (150, 255, 150)
         
-        status = self.small_font.render(status_text, True, status_color)
-        self.screen.blit(status, (10, text_y + 55))
+        status = self.small_font.render(f"Status: {status_text}", True, status_color)
+        self.screen.blit(status, (text_x, text_y + 135))
         
         # Slider for barrier density
-        slider_y = text_y + 85
-        slider_label = self.small_font.render(f"Barrier Density: {int(self.fence_density * 100)}%", True, self.TEXT_COLOR)
-        self.screen.blit(slider_label, (10, slider_y - 5))
+        slider_label = self.font.render("DENSITY", True, (255, 255, 100))
+        self.screen.blit(slider_label, (text_x + 60, 445))
+        
+        density_text = self.small_font.render(f"{int(self.fence_density * 100)}%", True, self.TEXT_COLOR)
+        self.screen.blit(density_text, (text_x + 100, 510))
         
         # Draw slider track
-        self.slider_rect.y = slider_y + 15
         pygame.draw.rect(self.screen, (100, 100, 100), self.slider_rect)
         
         # Draw slider handle
@@ -314,10 +343,68 @@ class VisualGame:
         self.slider_handle_rect.y = self.slider_rect.y - 5
         pygame.draw.rect(self.screen, (200, 200, 200), self.slider_handle_rect)
         
-        # Controls
-        controls = "F: Find | E: Edit Goals | SPACE: Animate | R: Reset | G: Regen | Q: Quit"
-        text4 = self.small_font.render(controls, True, (200, 200, 200))
-        self.screen.blit(text4, (10, text_y + 110))
+        # Algorithm selection buttons
+        algo_label = self.font.render("ALGORITHM", True, (255, 255, 100))
+        self.screen.blit(algo_label, (text_x + 50, 210))
+        
+        for algo_name, button_rect in self.algorithm_buttons.items():
+            # Button background
+            if algo_name == self.algorithm:
+                button_color = (0, 100, 200)  # Blue for selected
+            else:
+                button_color = (80, 80, 80)  # Dark gray for unselected
+            
+            pygame.draw.rect(self.screen, button_color, button_rect)
+            pygame.draw.rect(self.screen, (200, 200, 200), button_rect, 2)  # Border
+            
+            # Button text
+            if algo_name == "astar":
+                display_text = "A*"
+            elif algo_name == "dijkstra":
+                display_text = "DIJ"
+            elif algo_name == "greedy":
+                display_text = "GRE"
+            else:  # bfs
+                display_text = "BFS"
+            
+            button_text = self.small_font.render(display_text, True, self.TEXT_COLOR)
+            text_rect = button_text.get_rect(center=button_rect.center)
+            self.screen.blit(button_text, text_rect)
+        
+        # Heuristic selection buttons
+        heuristic_label = self.font.render("HEURISTIC", True, (255, 255, 100))
+        self.screen.blit(heuristic_label, (text_x + 50, 320))
+        
+        for heuristic_name, button_rect in self.heuristic_buttons.items():
+            # Button background
+            if heuristic_name == self.heuristic_type:
+                button_color = (0, 150, 0)  # Green for selected
+            else:
+                button_color = (80, 80, 80)  # Dark gray for unselected
+            
+            pygame.draw.rect(self.screen, button_color, button_rect)
+            pygame.draw.rect(self.screen, (200, 200, 200), button_rect, 2)  # Border
+            
+            # Button text
+            button_text = self.small_font.render(heuristic_name[:3].upper(), True, self.TEXT_COLOR)
+            text_rect = button_text.get_rect(center=button_rect.center)
+            self.screen.blit(button_text, text_rect)
+        
+        # Controls section
+        controls_label = self.font.render("CONTROLS", True, (255, 255, 100))
+        self.screen.blit(controls_label, (text_x + 55, 540))
+        
+        controls = [
+            "F: Find path",
+            "E: Edit goals",
+            "SPACE: Animate",
+            "R: Reset",
+            "G: Regenerate",
+            "Q: Quit"
+        ]
+        for i, control in enumerate(controls):
+            control_text = self.small_font.render(control, True, (200, 200, 200))
+            self.screen.blit(control_text, (text_x, 575 + i * 20))
     
     def count_barriers(self):
         """Count the number of barriers in the grid."""
@@ -473,14 +560,42 @@ class VisualGame:
                         tilled_count = len(self.grid_map.find_tilled_tiles())
                         print(f"Current tilled dirt tiles: {tilled_count}")
             
-            # Mouse events for slider and tile editing
+            # Mouse events for slider, tile editing, and heuristic buttons
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:  # Left click
-                    if self.editing_mode:
-                        # Handle tile click for editing
-                        self.handle_tile_click(event.pos)
-                    elif self.slider_handle_rect.collidepoint(event.pos):
-                        self.dragging_slider = True
+                    mouse_pos = event.pos
+                    
+                    # Check algorithm button clicks
+                    clicked_algo = False
+                    for algo_name, button_rect in self.algorithm_buttons.items():
+                        if button_rect.collidepoint(mouse_pos):
+                            self.algorithm = algo_name
+                            print(f"Algorithm changed to: {algo_name}")
+                            # Recalculate path if one exists
+                            if self.current_path and not self.editing_mode:
+                                self.find_path_to_nearest()
+                            clicked_algo = True
+                            break
+                    
+                    # Check heuristic button clicks
+                    clicked_heuristic = False
+                    if not clicked_algo:
+                        for heuristic_name, button_rect in self.heuristic_buttons.items():
+                            if button_rect.collidepoint(mouse_pos):
+                                self.heuristic_type = heuristic_name
+                                print(f"Heuristic changed to: {heuristic_name}")
+                                # Recalculate path if one exists
+                                if self.current_path and not self.editing_mode:
+                                    self.find_path_to_nearest()
+                                clicked_heuristic = True
+                                break
+                    
+                    if not clicked_algo and not clicked_heuristic:
+                        if self.editing_mode:
+                            # Handle tile click for editing
+                            self.handle_tile_click(event.pos)
+                        elif self.slider_handle_rect.collidepoint(event.pos):
+                            self.dragging_slider = True
             
             if event.type == pygame.MOUSEBUTTONUP:
                 if event.button == 1:
@@ -529,7 +644,13 @@ class VisualGame:
             self.update_animation()
             
             # Draw everything
-            self.screen.fill((0, 0, 0))  # Clear screen
+            self.screen.fill((0, 0, 0))  # Clear screen with dark background
+            
+            # Fill bottom-left area below grid (if any) with dark gray
+            if self.grid_height < self.height:
+                pygame.draw.rect(self.screen, (40, 40, 40), 
+                               (0, self.grid_height, self.grid_width, self.height - self.grid_height))
+            
             self.draw_grid()
             self.draw_path()
             self.draw_villager()
@@ -546,8 +667,8 @@ def run_visual_game_10x10():
     """Run a 10x10 visual game."""
     game = VisualGame(10, 10, tile_size=48)
     
-    villager_start = (0, 0)
-    tilled_positions = [(8, 8), (5, 5), (2, 7)]
+    villager_start = (5, 5)  # Center of 10x10 grid
+    tilled_positions = [(8, 8), (0, 0), (2, 7)]
     
     game.setup_game(villager_start, tilled_positions, fence_density=0.15)
     game.run()
@@ -557,8 +678,8 @@ def run_visual_game_20x20():
     """Run a 20x20 visual game."""
     game = VisualGame(20, 20, tile_size=32)
     
-    villager_start = (0, 0)
-    tilled_positions = [(18, 18), (10, 10), (5, 15)]
+    villager_start = (10, 10)  # Center of 20x20 grid
+    tilled_positions = [(18, 18), (0, 0), (5, 15)]
     
     game.setup_game(villager_start, tilled_positions, fence_density=0.12)
     game.run()
@@ -605,12 +726,12 @@ if __name__ == "__main__":
         
         if choice == "1":
             game = VisualGame(10, 10, tile_size=48)
-            villager_start = (0, 0)
+            villager_start = (5, 5)  # Center of 10x10 grid
             game.setup_game(villager_start, None, fence_density=fence_density, num_random_tilled=3)
             game.run()
         elif choice == "2":
             game = VisualGame(20, 20, tile_size=32)
-            villager_start = (0, 0)
+            villager_start = (10, 10)  # Center of 20x20 grid
             game.setup_game(villager_start, None, fence_density=fence_density, num_random_tilled=3)
             game.run()
         elif choice == "3":
@@ -621,8 +742,9 @@ if __name__ == "__main__":
         else:
             print("Invalid choice. Running 10x10 game...")
             game = VisualGame(10, 10, tile_size=48)
-            villager_start = (0, 0)
+            villager_start = (5, 5)  # Center of 10x10 grid
             game.setup_game(villager_start, None, fence_density=fence_density, num_random_tilled=3)
             game.run()
     except KeyboardInterrupt:
         print("\nGame cancelled.")
+

@@ -1,4 +1,4 @@
-"""
+﻿"""
 Villager Grid Pathfinding Game - Main Game File
 Example implementation of the villager pathfinding system.
 """
@@ -51,12 +51,14 @@ class VillagerGame:
         if self.grid_map.get_tile(villager_pos[0], villager_pos[1]) == "F":
             self.grid_map.set_tile(villager_pos[0], villager_pos[1], "")
     
-    def find_path_to_goal(self, goal: Tuple[int, int]) -> Optional[List[Tuple[int, int]]]:
+    def find_path_to_goal(self, goal: Tuple[int, int], algorithm: str = "astar", heuristic_type: str = "manhattan") -> Optional[List[Tuple[int, int]]]:
         """
         Find a path from the villager to a specific goal.
         
         Args:
             goal: Target position (row, col)
+            algorithm: Algorithm to use ("astar", "dijkstra", "greedy", "bfs")
+            heuristic_type: Type of heuristic to use ("manhattan", "euclidean", "chebyshev")
             
         Returns:
             Path as list of positions, or None if no path exists
@@ -65,11 +67,23 @@ class VillagerGame:
             print("Villager position not set!")
             return None
         
-        return self.pathfinder.find_path_astar(self.villager_position, goal)
+        # Choose algorithm
+        if algorithm == "dijkstra":
+            return self.pathfinder.find_path_dijkstra(self.villager_position, goal)
+        elif algorithm == "greedy":
+            return self.pathfinder.find_path_greedy_best_first(self.villager_position, goal, heuristic_type)
+        elif algorithm == "bfs":
+            return self.pathfinder.find_path_bfs(self.villager_position, goal)
+        else:  # astar
+            return self.pathfinder.find_path_astar(self.villager_position, goal, heuristic_type)
     
-    def find_nearest_tilled(self) -> Optional[Tuple[Tuple[int, int], List[Tuple[int, int]]]]:
+    def find_nearest_tilled(self, algorithm: str = "astar", heuristic_type: str = "manhattan") -> Optional[Tuple[Tuple[int, int], List[Tuple[int, int]]]]:
         """
         Find the nearest tilled dirt tile and path to it.
+        
+        Args:
+            algorithm: Algorithm to use ("astar", "dijkstra", "greedy", "bfs")
+            heuristic_type: Type of heuristic to use ("manhattan", "euclidean", "chebyshev")
         
         Returns:
             Tuple of (goal_position, path) or None
@@ -78,7 +92,7 @@ class VillagerGame:
             print("Villager position not set!")
             return None
         
-        return self.pathfinder.find_nearest_tilled(self.villager_position)
+        return self.pathfinder.find_nearest_tilled(self.villager_position, heuristic_type, algorithm)
     
     def move_villager(self, new_position: Tuple[int, int]) -> bool:
         """
@@ -102,16 +116,16 @@ class VillagerGame:
 
 
 def demo_small_grid():
-    """Demonstrate the game with a 10x10 grid."""
+    """Demonstrate the game with a 10x10 grid comparing all algorithms."""
     print("=" * 60)
-    print("DEMO: 10x10 Grid")
+    print("DEMO: 10x10 Grid - Comparing Algorithms")
     print("=" * 60)
     
     game = VillagerGame(10, 10)
     
     # Set up the game
-    villager_start = (0, 0)
-    tilled_positions = [(8, 8), (5, 5), (2, 7)]
+    villager_start = (5, 5)  # Center of 10x10 grid
+    tilled_positions = [(8, 8), (0, 0), (2, 7)]
     
     game.setup_game(villager_start, tilled_positions, fence_density=0.15)
     
@@ -119,27 +133,36 @@ def demo_small_grid():
     print("\nInitial Game State:")
     game.display_game()
     
-    # Find path to nearest tilled dirt
-    result = game.find_nearest_tilled()
-    if result:
-        goal, path = result
-        print(f"\n\nNearest tilled dirt found at: {goal}")
-        game.pathfinder.visualize_path(path, villager_start, goal)
-    else:
-        print("\nNo reachable tilled dirt found!")
+    # Find path using each algorithm
+    print("\n\nComparing Algorithms (with Manhattan heuristic):")
+    print("-" * 60)
+    
+    for algorithm in ["astar", "dijkstra", "greedy", "bfs"]:
+        result = game.pathfinder.find_nearest_tilled(villager_start, "manhattan", algorithm)
+        if result:
+            goal, path = result
+            algo_display = algorithm.upper() if algorithm != "astar" else "A*"
+            print(f"\n{algo_display} Algorithm:")
+            print(f"  Goal: {goal}")
+            print(f"  Route Length: {len(path) - 1} steps")
+            print(f"  Visited Nodes: {game.pathfinder.visited_nodes}")
+            print(f"  Time: {game.pathfinder.pathfinding_time * 1000000:.2f}Î¼s")
+        else:
+            print(f"\n{algorithm.upper()}: No path found")
 
 
 def demo_medium_grid():
-    """Demonstrate the game with a 20x20 grid."""
+    """Demonstrate the game with a 20x20 grid comparing algorithms."""
     print("\n\n" + "=" * 60)
-    print("DEMO: 20x20 Grid")
+    print("DEMO: 20x20 Grid - Algorithm Performance")
     print("=" * 60)
     
     game = VillagerGame(20, 20)
     
     # Set up the game
-    villager_start = (0, 0)
-    tilled_positions = [(18, 18), (10, 10), (5, 15)]
+    villager_start = (10, 10)  # Center of 20x20 grid
+    goal = (18, 18)
+    tilled_positions = [goal, (0, 0), (5, 15)]
     
     game.setup_game(villager_start, tilled_positions, fence_density=0.12)
     
@@ -147,28 +170,38 @@ def demo_medium_grid():
     print("\nInitial Game State:")
     game.display_game()
     
-    # Find path to specific tilled dirt
-    goal = (18, 18)
-    path = game.find_path_to_goal(goal)
-    if path:
-        print(f"\n\nPath to tilled dirt at {goal}:")
-        game.pathfinder.visualize_path(path, villager_start, goal)
-    else:
-        print(f"\nNo path found to {goal}!")
+    # Compare algorithms for pathfinding to specific goal
+    print(f"\n\nFinding path to {goal} with different algorithms:")
+    print("-" * 60)
+    
+    for algorithm in ["astar", "dijkstra", "greedy", "bfs"]:
+        if algorithm == "dijkstra" or algorithm == "bfs":
+            path = game.find_path_to_goal(goal, algorithm)
+        else:
+            path = game.find_path_to_goal(goal, algorithm, "manhattan")
+        
+        if path:
+            algo_display = algorithm.upper() if algorithm != "astar" else "A*"
+            print(f"\n{algo_display} Algorithm:")
+            print(f"  Route Length: {len(path) - 1} steps")
+            print(f"  Visited Nodes: {game.pathfinder.visited_nodes}")
+            print(f"  Time: {game.pathfinder.pathfinding_time * 1000000:.2f}Î¼s")
+        else:
+            print(f"\n{algorithm.upper()}: No path found")
 
 
 def demo_large_grid():
-    """Demonstrate the game with a 50x50 grid."""
+    """Demonstrate the game with a 50x50 grid comparing algorithm efficiency."""
     print("\n\n" + "=" * 60)
-    print("DEMO: 50x50 Grid")
+    print("DEMO: 50x50 Grid - Algorithm Efficiency Test")
     print("=" * 60)
     
     game = VillagerGame(50, 50)
     
     # Set up the game
-    villager_start = (0, 0)
+    villager_start = (25, 25)  # Center of 50x50 grid
     # Place multiple tilled dirt tiles
-    tilled_positions = [(45, 45), (25, 25), (10, 40), (40, 10)]
+    tilled_positions = [(45, 45), (0, 0), (10, 40), (40, 10)]
     
     game.setup_game(villager_start, tilled_positions, fence_density=0.1)
     
@@ -176,15 +209,22 @@ def demo_large_grid():
     print(f"Villager position: {villager_start}")
     print(f"Tilled dirt positions: {tilled_positions}")
     
-    # Find path to nearest tilled dirt
-    result = game.find_nearest_tilled()
-    if result:
-        goal, path = result
-        print(f"\nNearest tilled dirt: {goal}")
-        print(f"Path length: {game.pathfinder.get_path_length(path)} steps")
-        print(f"Path: {path[:10]}..." if len(path) > 10 else f"Path: {path}")
-    else:
-        print("\nNo reachable tilled dirt found!")
+    # Compare algorithms on large grid
+    print("\n\nComparing algorithms on large grid:")
+    print("-" * 60)
+    
+    for algorithm in ["astar", "dijkstra", "greedy", "bfs"]:
+        result = game.pathfinder.find_nearest_tilled(villager_start, "manhattan", algorithm)
+        if result:
+            goal, path = result
+            algo_display = algorithm.upper() if algorithm != "astar" else "A*"
+            print(f"\n{algo_display} Algorithm:")
+            print(f"  Nearest goal: {goal}")
+            print(f"  Route Length: {len(path) - 1} steps")
+            print(f"  Visited Nodes: {game.pathfinder.visited_nodes}")
+            print(f"  Time: {game.pathfinder.pathfinding_time * 1000000:.2f}Î¼s")
+        else:
+            print(f"\n{algorithm.upper()}: No reachable tilled dirt found!")
 
 
 def custom_game_example():
@@ -360,7 +400,7 @@ def demo_nearest_tilled():
             print(f"  Tile {i} at {tilled_pos}: BLOCKED")
     
     if nearest_tile:
-        print(f"\n  → Nearest tile chosen: {nearest_tile} (distance: {shortest_distance})")
+        print(f"\n  â†’ Nearest tile chosen: {nearest_tile} (distance: {shortest_distance})")
 
 
 if __name__ == "__main__":
@@ -391,3 +431,4 @@ if __name__ == "__main__":
         print("\nTo run experiments:")
         print("  python main.py --experiment  (Section 7.1 barrier experiment)")
         print("  python main.py --nearest     (Nearest tile demo)")
+
